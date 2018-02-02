@@ -57,7 +57,7 @@ if (isCleanRecordsNeeded && fs.existsSync(IMAGE_RECORD_FILE)) {
 }
 
 app.use(cors());
-app.use(bodyParser.json({limit: '10mb'}));
+app.use(bodyParser.json({limit: '15mb'}));
 app.use('/', express.static(CLIENT_STATIC_PATH));
 app.use('/' + ROUTE.GET.IMAGES, express.static('uploads/resized'));
 
