@@ -1,3 +1,4 @@
+const CLIENT_STATIC_PATH = '../ImageTagger/dist';
 const IMAGE_FORMAT = '.png';
 const CLARIFAI_API_KEY = 'aad69e3b420e4b1bbec50e545566b34f';
 const IMAGE_DIR = './uploads/'
@@ -27,7 +28,6 @@ const fs = require('fs');
 const sharp = require('sharp');
 const clarifai = require('clarifai');
 const fileApi = require('file-api');
-const io = require('socket.io')();
 
 const app = express();
 
@@ -58,6 +58,7 @@ if (isCleanRecordsNeeded && fs.existsSync(IMAGE_RECORD_FILE)) {
 
 app.use(cors());
 app.use(bodyParser.json({limit: '10mb'}));
+app.use('/', express.static(CLIENT_STATIC_PATH));
 app.use('/' + ROUTE.GET.IMAGES, express.static('uploads/resized'));
 
 app.post('/' + ROUTE.POST.IMAGE, (req, res) => {
