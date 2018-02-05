@@ -1,19 +1,34 @@
 const CLIENT_STATIC_PATH = '../ImageTagger/dist';
 const IMAGE_FORMAT = '.png';
 const CLARIFAI_API_KEY = 'aad69e3b420e4b1bbec50e545566b34f';
-const IMAGE_DIR = './uploads/'
-const IMAGE_RAW_DIR = './uploads/raw/';
-const IMAGE_RESIZED_DIR = './uploads/resized/';
+const IMAGE_DIR = './uploads/';
+const IMAGE_TAGGER_DIR = './uploads/tagger/';
+const IMAGE_TAGGER_RAW_DIR = './uploads/tagger/raw/';
+const IMAGE_TAGGER_RESIZED_DIR = './uploads/tagger/resized/';
+const IMAGE_TAGGER_RECORD_FILE = './uploads/tagger/record.json';
+const IMAGE_FACE_DIR = './uploads/face/';
+const IMAGE_FACE_RAW_DIR = './uploads/face/raw/';
+const IMAGE_FACE_RESIZED_DIR = './uploads/face/resized/';
+const IMAGE_FACE_RECORD_FILE = './uploads/face/record.json';
 const IMAGE_HEIGHT = 300;
-const IMAGE_RECORD_FILE = './uploads/record.json';
+
 const ROUTE = {
   POST: {
-    IMAGE: 'image/',
+    IMAGE: {
+      TAGGER: 'image/tagger/',
+      FACE: 'image/face/',
+    },
   },
   GET: {
-    IMAGES: 'images/',
-    RECORDS: 'records/'
-  }
+    IMAGES: {
+      TAGGER: 'images/tagger/',
+      FACE: 'images/face/',
+    },
+    RECORDS: {
+      TAGGER: 'records/tagger/',
+      FACE: 'records/face/',
+    },
+  },
 };
 const STATUS_CODE = {
   OK: 200,
@@ -35,42 +50,84 @@ const clarifaiAgent = new Clarifai.App({
   apiKey: CLARIFAI_API_KEY
 });
 
-let imageRecords = [];
-let isCleanRecordsNeeded = false;
+let taggerImageRecords = [];
+let faceImageRecords = [];
+let isCleanTaggerRecordsNeeded = false;
+let isCleanFaceRecordsNeeded = false;
 
 if (!fs.existsSync(IMAGE_DIR)) {
   fs.mkdirSync(IMAGE_DIR);
-  isCleanRecordsNeeded = true;
+} else {
+  if (!fs.existsSync(IMAGE_TAGGER_DIR)) {
+    fs.mkdirSync(IMAGE_TAGGER_DIR);
+  } else {
+    if (!fs.existsSync(IMAGE_TAGGER_RAW_DIR)) {
+      fs.mkdirSync(IMAGE_TAGGER_RAW_DIR);
+      isCleanTaggerRecordsNeeded = true;
+    }
+    if (!fs.existsSync(IMAGE_TAGGER_RESIZED_DIR)) {
+      fs.mkdirSync(IMAGE_TAGGER_RESIZED_DIR);
+      isCleanTaggerRecordsNeeded = true;
+    }
+    if (isCleanTaggerRecordsNeeded && fs.existsSync(IMAGE_TAGGER_RECORD_FILE)) {
+      fs.unlinkSync(IMAGE_TAGGER_RECORD_FILE);
+    } else if (fs.existsSync(IMAGE_TAGGER_RECORD_FILE)) {
+      taggerImageRecords = loadImageRecords(IMAGE_TAGGER_RECORD_FILE);
+    }
+  }
+
+  if (!fs.existsSync(IMAGE_FACE_DIR)) {
+    fs.mkdirSync(IMAGE_FACE_DIR);
+  } else {
+    if (!fs.existsSync(IMAGE_FACE_RAW_DIR)) {
+      fs.mkdirSync(IMAGE_FACE_RAW_DIR);
+      isCleanFaceRecordsNeeded = true;
+    }
+    if (!fs.existsSync(IMAGE_FACE_RESIZED_DIR)) {
+      fs.mkdirSync(IMAGE_FACE_RESIZED_DIR);
+      isCleanFaceRecordsNeeded = true;
+    }
+    if (isCleanFaceRecordsNeeded && fs.existsSync(IMAGE_FACE_RECORD_FILE)) {
+      fs.unlinkSync(IMAGE_FACE_RECORD_FILE);
+    } else if (fs.existsSync(IMAGE_FACE_RECORD_FILE)) {
+      faceImageRecords = loadImageRecords(IMAGE_FACE_RECORD_FILE);
+    }
+  }
 }
-if (!fs.existsSync(IMAGE_RAW_DIR)) {
-  fs.mkdirSync(IMAGE_RAW_DIR);
-  isCleanRecordsNeeded = true;
-}
-if (!fs.existsSync(IMAGE_RESIZED_DIR)) {
-  fs.mkdirSync(IMAGE_RESIZED_DIR);
-  isCleanRecordsNeeded = true;
-}
-if (isCleanRecordsNeeded && fs.existsSync(IMAGE_RECORD_FILE)) {
-  fs.unlinkSync(IMAGE_RECORD_FILE);
-} else if (fs.existsSync(IMAGE_RECORD_FILE)) {
-  imageRecords = loadImageRecords(IMAGE_RECORD_FILE);
-}
+
 
 app.use(cors());
 app.use(bodyParser.json({limit: '15mb'}));
 app.use('/', express.static(CLIENT_STATIC_PATH));
-app.use('/' + ROUTE.GET.IMAGES, express.static('uploads/resized'));
+app.use('/' + ROUTE.GET.IMAGES.TAGGER, express.static('uploads/tagger/resized'));
+app.use('/' + ROUTE.GET.IMAGES.FACE, express.static('uploads/face/resized'));
 
-app.post('/' + ROUTE.POST.IMAGE, (req, res) => {
+app.post('/' + ROUTE.POST.IMAGE.TAGGER, (req, res) => {
+  handleImageUpload(req, res, true);
+});
+app.post('/' + ROUTE.POST.IMAGE.FACE, (req, res) => {
+  handleImageUpload(req, res, false);
+});
+
+app.get('/' + ROUTE.GET.RECORDS.TAGGER, (req, res) => {
+  res.status(STATUS_CODE.OK).end(JSON.stringify({records: taggerImageRecords}));
+});
+app.get('/' + ROUTE.GET.RECORDS.FACE, (req, res) => {
+  res.status(STATUS_CODE.OK).end(JSON.stringify({records: faceImageRecords}));
+});
+
+app.listen(3000, () => console.log('Server app listening on port 3000!'));
+
+function handleImageUpload(req, res, isTagger) {
   const base64Data = req.body.base64Url.replace(/^data:image\/png;base64,/, "").replace(/^data:image\/jpeg;base64,/, "");
   const resizedName = req.body.name.substr(0,req.body.name.lastIndexOf('.')) + IMAGE_FORMAT;
-  const resizedPath = IMAGE_RESIZED_DIR + resizedName;
+  const resizedPath = (isTagger ? IMAGE_TAGGER_RESIZED_DIR : IMAGE_FACE_RESIZED_DIR) + resizedName;
   console.log("Image uploaded: " + req.body.name);
-  fs.writeFileSync(IMAGE_RAW_DIR + req.body.name, base64Data, 'base64', function(err) {
+  fs.writeFileSync((isTagger ? IMAGE_TAGGER_RAW_DIR : IMAGE_FACE_RAW_DIR) + req.body.name, base64Data, 'base64', function(err) {
     console.error(err);
     res.status(STATUS_CODE.SERVER_ERROR).end(JSON.stringify({}));
   });
-  sharp(IMAGE_RAW_DIR + req.body.name)
+  sharp((isTagger ? IMAGE_TAGGER_RAW_DIR : IMAGE_FACE_RAW_DIR) + req.body.name)
     .resize(null, IMAGE_HEIGHT)
     .png()
     .toFile(resizedPath, (err, info) => {
@@ -81,17 +138,11 @@ app.post('/' + ROUTE.POST.IMAGE, (req, res) => {
         console.log(info);
         predictConcepts(resizedPath, (concepts) => {
           res.status(STATUS_CODE.ACCEPTED).end(JSON.stringify({concepts}));
-          updateImageRecords(resizedName, concepts);
+          updateTaggerImageRecords(resizedName, concepts);
         });
       }
     });
-});
-
-app.get('/' + ROUTE.GET.RECORDS, (req, res) => {
-  res.status(STATUS_CODE.OK).end(JSON.stringify({records: imageRecords}));
-});
-
-app.listen(3000, () => console.log('Server app listening on port 3000!'));
+}
 
 function predictConcepts(imagePath, callback) {
   toDataURL(imagePath, (dataUrl) => {
@@ -124,20 +175,20 @@ function loadImageRecords(path) {
   return JSON.parse(fs.readFileSync(path, 'utf8'));
 }
 
-function updateImageRecords(name, concepts) {
+function updateTaggerImageRecords(name, concepts) {
   const newRecord = {
     name,
     concepts,
   };
   let isFound = false;
-  imageRecords.forEach((record) => {
+  taggerImageRecords.forEach((record) => {
     if (record.name === newRecord.name) {
       record.concepts = newRecord.concepts;
       isFound = true;
     }
   });
   if (!isFound) {
-    imageRecords.push(newRecord);
+    taggerImageRecords.push(newRecord);
   }
-  fs.writeFileSync(IMAGE_RECORD_FILE, JSON.stringify(imageRecords, null, 2));
+  fs.writeFileSync(IMAGE_TAGGER_RECORD_FILE, JSON.stringify(taggerImageRecords, null, 2));
 }
