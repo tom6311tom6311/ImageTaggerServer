@@ -13,13 +13,15 @@ const IMAGE_FACE_RECORD_FILE = './uploads/face/record.json';
 const API_URL = {
   AZURE: {
     FACE_DETECT: 'https://westcentralus.api.cognitive.microsoft.com/face/v1.0/detect/',
+    FACE_LISTS: 'https://westcentralus.api.cognitive.microsoft.com/face/v1.0/facelists/',
+    FIND_SIMILARS: 'https://westcentralus.api.cognitive.microsoft.com/face/v1.0/findsimilars/',
   },
 };
 const API_KEY = {
   AZURE: {
-    FACE_DETECT: [
-      'f2810df90a854650bd4a7d148f708198',
-      'b7c2af713a8b4b4f816532ee2facff11',
+    FACE: [
+      'a46d5f77bf8140a1a91d6d1444b6cf20',
+      // 'f93d891a0f004c26bb9cb012f99f7c22',
     ],
   },
   CLARIFAI: 'aad69e3b420e4b1bbec50e545566b34f',
@@ -29,6 +31,7 @@ const FACE_DETECT_PARAMS = {
   returnFaceLandmarks: false,
   returnFaceAttributes: 'age,gender,smile,glasses,emotion,hair,makeup',
 }
+const FACE_LIST_ID = 'demo_face_list';
 
 const ROUTE = {
   POST: {
@@ -77,42 +80,42 @@ let isCleanFaceRecordsNeeded = false;
 
 if (!fs.existsSync(IMAGE_DIR)) {
   fs.mkdirSync(IMAGE_DIR);
-} else {
-  if (!fs.existsSync(IMAGE_TAGGER_DIR)) {
-    fs.mkdirSync(IMAGE_TAGGER_DIR);
-  } else {
-    if (!fs.existsSync(IMAGE_TAGGER_RAW_DIR)) {
-      fs.mkdirSync(IMAGE_TAGGER_RAW_DIR);
-      isCleanTaggerRecordsNeeded = true;
-    }
-    if (!fs.existsSync(IMAGE_TAGGER_RESIZED_DIR)) {
-      fs.mkdirSync(IMAGE_TAGGER_RESIZED_DIR);
-      isCleanTaggerRecordsNeeded = true;
-    }
-    if (isCleanTaggerRecordsNeeded && fs.existsSync(IMAGE_TAGGER_RECORD_FILE)) {
-      fs.unlinkSync(IMAGE_TAGGER_RECORD_FILE);
-    } else if (fs.existsSync(IMAGE_TAGGER_RECORD_FILE)) {
-      taggerImageRecords = loadImageRecords(IMAGE_TAGGER_RECORD_FILE);
-    }
-  }
+}
 
-  if (!fs.existsSync(IMAGE_FACE_DIR)) {
-    fs.mkdirSync(IMAGE_FACE_DIR);
-  } else {
-    if (!fs.existsSync(IMAGE_FACE_RAW_DIR)) {
-      fs.mkdirSync(IMAGE_FACE_RAW_DIR);
-      isCleanFaceRecordsNeeded = true;
-    }
-    if (!fs.existsSync(IMAGE_FACE_RESIZED_DIR)) {
-      fs.mkdirSync(IMAGE_FACE_RESIZED_DIR);
-      isCleanFaceRecordsNeeded = true;
-    }
-    if (isCleanFaceRecordsNeeded && fs.existsSync(IMAGE_FACE_RECORD_FILE)) {
-      fs.unlinkSync(IMAGE_FACE_RECORD_FILE);
-    } else if (fs.existsSync(IMAGE_FACE_RECORD_FILE)) {
-      faceImageRecords = loadImageRecords(IMAGE_FACE_RECORD_FILE);
-    }
-  }
+if (!fs.existsSync(IMAGE_TAGGER_DIR)) {
+  fs.mkdirSync(IMAGE_TAGGER_DIR);
+}
+if (!fs.existsSync(IMAGE_TAGGER_RAW_DIR)) {
+  fs.mkdirSync(IMAGE_TAGGER_RAW_DIR);
+  isCleanTaggerRecordsNeeded = true;
+}
+if (!fs.existsSync(IMAGE_TAGGER_RESIZED_DIR)) {
+  fs.mkdirSync(IMAGE_TAGGER_RESIZED_DIR);
+  isCleanTaggerRecordsNeeded = true;
+}
+if (isCleanTaggerRecordsNeeded && fs.existsSync(IMAGE_TAGGER_RECORD_FILE)) {
+  fs.unlinkSync(IMAGE_TAGGER_RECORD_FILE);
+} else if (fs.existsSync(IMAGE_TAGGER_RECORD_FILE)) {
+  taggerImageRecords = loadImageRecords(IMAGE_TAGGER_RECORD_FILE);
+}
+
+if (!fs.existsSync(IMAGE_FACE_DIR)) {
+  fs.mkdirSync(IMAGE_FACE_DIR);
+  initFaceList();
+}
+if (!fs.existsSync(IMAGE_FACE_RAW_DIR)) {
+  fs.mkdirSync(IMAGE_FACE_RAW_DIR);
+  isCleanFaceRecordsNeeded = true;
+}
+if (!fs.existsSync(IMAGE_FACE_RESIZED_DIR)) {
+  fs.mkdirSync(IMAGE_FACE_RESIZED_DIR);
+  isCleanFaceRecordsNeeded = true;
+}
+if (isCleanFaceRecordsNeeded && fs.existsSync(IMAGE_FACE_RECORD_FILE)) {
+  fs.unlinkSync(IMAGE_FACE_RECORD_FILE);
+  initFaceList();
+} else if (fs.existsSync(IMAGE_FACE_RECORD_FILE)) {
+  faceImageRecords = loadImageRecords(IMAGE_FACE_RECORD_FILE);
 }
 
 
@@ -140,14 +143,14 @@ app.listen(3000, () => console.log('Server app listening on port 3000!'));
 
 function handleImageUpload(req, res, isTagger) {
   const base64Data = req.body.base64Url.replace(/^data:image\/png;base64,/, "").replace(/^data:image\/jpeg;base64,/, "");
-  const resizedName = req.body.name.substr(0,req.body.name.lastIndexOf('.')) + IMAGE_FORMAT;
+  const resizedName = req.body.fileName.substr(0,req.body.fileName.lastIndexOf('.')) + IMAGE_FORMAT;
   const resizedPath = (isTagger ? IMAGE_TAGGER_RESIZED_DIR : IMAGE_FACE_RESIZED_DIR) + resizedName;
-  console.log("Image uploaded: " + req.body.name);
-  fs.writeFileSync((isTagger ? IMAGE_TAGGER_RAW_DIR : IMAGE_FACE_RAW_DIR) + req.body.name, base64Data, 'base64', function(err) {
+  console.log("Image uploaded: " + req.body.fileName);
+  fs.writeFileSync((isTagger ? IMAGE_TAGGER_RAW_DIR : IMAGE_FACE_RAW_DIR) + req.body.fileName, base64Data, 'base64', function(err) {
     console.error(err);
     res.status(STATUS_CODE.SERVER_ERROR).end(JSON.stringify({}));
   });
-  sharp((isTagger ? IMAGE_TAGGER_RAW_DIR : IMAGE_FACE_RAW_DIR) + req.body.name)
+  sharp((isTagger ? IMAGE_TAGGER_RAW_DIR : IMAGE_FACE_RAW_DIR) + req.body.fileName)
     .resize(null, IMAGE_HEIGHT)
     .png()
     .toFile(resizedPath, (err, info) => {
@@ -163,10 +166,37 @@ function handleImageUpload(req, res, isTagger) {
           });
         }
         else {
-          faceIdent(resizedPath, (result) => {
-            res.status(STATUS_CODE.ACCEPTED).end(JSON.stringify({result}));
-            updateFaceImageRecords(resizedName, result);
-          });
+          faceIdent(resizedPath, (identResult) => {
+            if (identResult.length === 0) {
+              res.status(STATUS_CODE.ACCEPTED).end(JSON.stringify({
+                result: 'noOne',
+              }));
+              return;
+            }
+            findSimilarFace(identResult[0].faceId, (findResult) => {
+              addFaceToFaceList(resizedPath, (addResult) => {
+                if (findResult.length > 0) {
+                  updateFaceImageRecordsAndResponse(
+                    addResult.persistedFaceId,
+                    identResult[0],
+                    findResult[0].persistedFaceId,
+                    findResult[0].confidence,
+                    req.body.name,
+                    resizedName,
+                    res);
+                } else {
+                  updateFaceImageRecordsAndResponse(
+                    addResult.persistedFaceId,
+                    identResult[0],
+                    undefined,
+                    0,
+                    req.body.name,
+                    resizedName,
+                    res);
+                }
+              });
+            });
+          })
         }
       }
     });
@@ -192,14 +222,12 @@ function predictConcepts(imagePath, callback) {
 function faceIdent(imagePath, callback) {
   toBinaryString(imagePath, (binString) => {
     const url = API_URL.AZURE.FACE_DETECT + '?' + queryString.stringify(FACE_DETECT_PARAMS);
-    console.log(url);
     fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/octet-stream',
-        'Ocp-Apim-Subscription-Key': randomChoice(API_KEY.AZURE.FACE_DETECT),
+        'Ocp-Apim-Subscription-Key': randomChoice(API_KEY.AZURE.FACE),
       },
-      qs: FACE_DETECT_PARAMS,
       body: binString,
     }).then(res => res.json())
       .then((resJson) => {
@@ -215,7 +243,7 @@ function faceIdent(imagePath, callback) {
 function toDataURL(path, callback) {
   const reader = new fileApi.FileReader();
   reader.addEventListener('load', function (ev) {
-    console.log("dataUrlSize:", ev.target.result.length);
+    // console.log("dataUrlSize:", ev.target.result.length);
     const base64Data = ev.target.result.replace(/^data:image\/png;base64,/, "").replace(/^data:image\/jpeg;base64,/, "");
     callback(base64Data);
   });
@@ -253,22 +281,210 @@ function updateTaggerImageRecords(name, concepts) {
   fs.writeFileSync(IMAGE_TAGGER_RECORD_FILE, JSON.stringify(taggerImageRecords, null, 2));
 }
 
-function updateFaceImageRecords(name, result) {
-  const newRecord = {
-    name,
-    result,
-  };
-  let isFound = false;
-  faceImageRecords.forEach((record) => {
-    if (record.name === newRecord.name) {
-      record.result = newRecord.result;
-      isFound = true;
+function updateFaceImageRecordsAndResponse(selfFaceId, selfIdentResult, similarFaceId, confidence, name, fileName, res) {
+  if (!similarFaceId) {
+    let isFound = false;
+    faceImageRecords.forEach((record) => {
+      if (record.name === name) {
+        isFound = true;
+      }
+    });
+    if (isFound) {
+      // Name found but not the same person
+      res.status(STATUS_CODE.ACCEPTED).end(JSON.stringify({
+        result: 'unknown',
+        imitate: name,
+      }));
+      deleteFaceFromFaceList(selfFaceId);
+      return;
+    } else {
+      faceImageRecords.push({
+        name,
+        faceIds: [selfFaceId],
+        fileNames: [fileName],
+        identResults: [selfIdentResult],
+      });
+      res.status(STATUS_CODE.ACCEPTED).end(JSON.stringify({
+        result: 'new',
+      }));
     }
-  });
-  if (!isFound) {
-    faceImageRecords.push(newRecord);
+  } else {
+    let isFound = false;
+    faceImageRecords.forEach((record) => {
+      if (record.faceIds.includes(similarFaceId)) {
+        isFound = true;
+        record.faceIds.push(selfFaceId);
+        record.fileNames.push(fileName);
+        record.identResults.push(selfIdentResult);
+        if (record.name === name) {
+          res.status(STATUS_CODE.ACCEPTED).end(JSON.stringify({
+            result: 'right',
+          }));
+        } else {
+          res.status(STATUS_CODE.ACCEPTED).end(JSON.stringify({
+            result: 'wrong',
+            rightName: record.name,
+            confidence
+          }));
+        }
+      }
+    });
+    if (!isFound) {
+      // Name found but not the same person
+      console.log("Error: cannot find similar faceId locally");
+      res.status(STATUS_CODE.ACCEPTED).end(JSON.stringify({
+        result: 'unknown',
+        imitate: name,
+      }));
+      deleteFaceFromFaceList(selfFaceId);
+      return;
+    }
   }
+
   fs.writeFileSync(IMAGE_FACE_RECORD_FILE, JSON.stringify(faceImageRecords, null, 2));
+}
+
+function initFaceList() {
+  console.log("Init face list...")
+  const url = API_URL.AZURE.FACE_LISTS;
+  fetch(url, {
+    method: 'GET',
+    headers: {
+      'Ocp-Apim-Subscription-Key': randomChoice(API_KEY.AZURE.FACE),
+    },
+  }).then(res => res.json())
+    .then((resJson) => {
+      console.log(resJson);
+      resJson.forEach((list) => {
+        if (list.faceListId === FACE_LIST_ID) {
+          deleteFaceList();
+        }
+      });
+      createFaceList();
+    })
+    .catch((err) => {
+      console.error(err);
+    });
+}
+
+function deleteFaceList() {
+  console.log("Deleting face list...");
+  const url = API_URL.AZURE.FACE_LISTS;
+  fetch(url + FACE_LIST_ID, {
+    method: 'DELETE',
+    headers: {
+      'Ocp-Apim-Subscription-Key': randomChoice(API_KEY.AZURE.FACE),
+    },
+  }).then(res => res.json())
+    .then((resJson) => {
+      console.log(resJson);
+    })
+    .catch((err) => {
+      console.error(err);
+    });
+}
+
+function createFaceList() {
+  console.log("Creating face list...");
+  const url = API_URL.AZURE.FACE_LISTS;
+  fetch(url + FACE_LIST_ID, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Ocp-Apim-Subscription-Key': randomChoice(API_KEY.AZURE.FACE),
+    },
+    body: JSON.stringify({
+      name: 'face list for demo',
+      userData: 'nanana',
+    }),
+  }).then(res => res.json())
+    .then((resJson) => {
+      console.log(resJson);
+    })
+    .catch((err) => {
+      console.error(err);
+    });
+}
+
+function addFaceToFaceList(imagePath, callback) {
+  toBinaryString(imagePath, (binString) => {
+    console.log("Adding face to face list...");
+    const url = API_URL.AZURE.FACE_LISTS + FACE_LIST_ID + '/persistedFaces';
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'Ocp-Apim-Subscription-Key': randomChoice(API_KEY.AZURE.FACE),
+      },
+      body: binString,
+    }).then(res => res.json())
+      .then((resJson) => {
+        console.log(resJson);
+        callback(resJson);
+        getFaceList();
+      })
+      .catch((err) => {
+        console.error(err);
+      });
+  });
+}
+
+function deleteFaceFromFaceList(faceId) {
+  console.log("Deleting face from face list: " + faceId);
+  const url = API_URL.AZURE.FACE_LISTS + FACE_LIST_ID + '/persistedFaces/' + faceId;
+  fetch(url, {
+    method: 'DELETE',
+    headers: {
+      'Ocp-Apim-Subscription-Key': randomChoice(API_KEY.AZURE.FACE),
+    },
+  }).then(res => res.json())
+    .then((resJson) => {
+      console.log(resJson);
+    })
+    .catch((err) => {
+      console.error(err);
+    });
+}
+
+function findSimilarFace(faceId, callback) {
+  const url = API_URL.AZURE.FIND_SIMILARS;
+  console.log("Finding similar face... as " + faceId);
+  fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Ocp-Apim-Subscription-Key': randomChoice(API_KEY.AZURE.FACE),
+    },
+    body: JSON.stringify({
+      faceId,
+      faceListId: FACE_LIST_ID,
+      maxNumOfCandidatesReturned:1,
+    }),
+  }).then(res => res.json())
+    .then((resJson) => {
+      console.log(resJson);
+      callback(resJson);
+    })
+    .catch((err) => {
+      console.error(err);
+    });
+}
+
+function getFaceList() {
+  console.log("Get face list...")
+  const url = API_URL.AZURE.FACE_LISTS + FACE_LIST_ID;
+  fetch(url, {
+    method: 'GET',
+    headers: {
+      'Ocp-Apim-Subscription-Key': randomChoice(API_KEY.AZURE.FACE),
+    },
+  }).then(res => res.json())
+    .then((resJson) => {
+      console.log(resJson);
+    })
+    .catch((err) => {
+      console.error(err);
+    });
 }
 
 function randomChoice(arr) {
