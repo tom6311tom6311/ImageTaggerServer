@@ -1,6 +1,6 @@
 const CLIENT_STATIC_PATH = '../ImageTagger/dist';
 const IMAGE_FORMAT = '.png';
-const CLARIFAI_API_KEY = 'aad69e3b420e4b1bbec50e545566b34f';
+const IMAGE_HEIGHT = 300;
 const IMAGE_DIR = './uploads/';
 const IMAGE_TAGGER_DIR = './uploads/tagger/';
 const IMAGE_TAGGER_RAW_DIR = './uploads/tagger/raw/';
@@ -10,7 +10,25 @@ const IMAGE_FACE_DIR = './uploads/face/';
 const IMAGE_FACE_RAW_DIR = './uploads/face/raw/';
 const IMAGE_FACE_RESIZED_DIR = './uploads/face/resized/';
 const IMAGE_FACE_RECORD_FILE = './uploads/face/record.json';
-const IMAGE_HEIGHT = 300;
+const API_URL = {
+  AZURE: {
+    FACE_DETECT: 'https://westcentralus.api.cognitive.microsoft.com/face/v1.0/detect/',
+  },
+};
+const API_KEY = {
+  AZURE: {
+    FACE_DETECT: [
+      'f2810df90a854650bd4a7d148f708198',
+      'b7c2af713a8b4b4f816532ee2facff11',
+    ],
+  },
+  CLARIFAI: 'aad69e3b420e4b1bbec50e545566b34f',
+};
+const FACE_DETECT_PARAMS = {
+  returnFaceId: true,
+  returnFaceLandmarks: false,
+  returnFaceAttributes: 'age,gender,smile,glasses,emotion,hair,makeup',
+}
 
 const ROUTE = {
   POST: {
@@ -43,11 +61,13 @@ const fs = require('fs');
 const sharp = require('sharp');
 const clarifai = require('clarifai');
 const fileApi = require('file-api');
+const fetch = require('node-fetch');
+const queryString = require('query-string');
 
 const app = express();
 
 const clarifaiAgent = new Clarifai.App({
-  apiKey: CLARIFAI_API_KEY
+  apiKey: API_KEY.CLARIFAI
 });
 
 let taggerImageRecords = [];
@@ -136,10 +156,18 @@ function handleImageUpload(req, res, isTagger) {
         res.status(STATUS_CODE.SERVER_ERROR).end(JSON.stringify({}));
       } else if (info) {
         console.log(info);
-        predictConcepts(resizedPath, (concepts) => {
-          res.status(STATUS_CODE.ACCEPTED).end(JSON.stringify({concepts}));
-          updateTaggerImageRecords(resizedName, concepts);
-        });
+        if (isTagger) {
+          predictConcepts(resizedPath, (concepts) => {
+            res.status(STATUS_CODE.ACCEPTED).end(JSON.stringify({concepts}));
+            updateTaggerImageRecords(resizedName, concepts);
+          });
+        }
+        else {
+          faceIdent(resizedPath, (result) => {
+            res.status(STATUS_CODE.ACCEPTED).end(JSON.stringify({result}));
+            updateFaceImageRecords(resizedName, result);
+          });
+        }
       }
     });
 }
@@ -158,7 +186,30 @@ function predictConcepts(imagePath, callback) {
         // console.error(err);
       }
     );
-  })
+  });
+}
+
+function faceIdent(imagePath, callback) {
+  toBinaryString(imagePath, (binString) => {
+    const url = API_URL.AZURE.FACE_DETECT + '?' + queryString.stringify(FACE_DETECT_PARAMS);
+    console.log(url);
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'Ocp-Apim-Subscription-Key': randomChoice(API_KEY.AZURE.FACE_DETECT),
+      },
+      qs: FACE_DETECT_PARAMS,
+      body: binString,
+    }).then(res => res.json())
+      .then((resJson) => {
+        console.log(resJson);
+        callback(resJson);
+      })
+      .catch((err) => {
+        console.error(err);
+      });
+  });
 }
 
 function toDataURL(path, callback) {
@@ -169,6 +220,15 @@ function toDataURL(path, callback) {
     callback(base64Data);
   });
   reader.readAsDataURL(new fileApi.File(path));
+}
+
+function toBinaryString(path, callback) {
+  const reader = new fileApi.FileReader();
+  reader.addEventListener('load', function (ev) {
+    const binString = ev.target.result;
+    callback(binString);
+  });
+  reader.readAsArrayBuffer(new fileApi.File(path));
 }
 
 function loadImageRecords(path) {
@@ -191,4 +251,26 @@ function updateTaggerImageRecords(name, concepts) {
     taggerImageRecords.push(newRecord);
   }
   fs.writeFileSync(IMAGE_TAGGER_RECORD_FILE, JSON.stringify(taggerImageRecords, null, 2));
+}
+
+function updateFaceImageRecords(name, result) {
+  const newRecord = {
+    name,
+    result,
+  };
+  let isFound = false;
+  faceImageRecords.forEach((record) => {
+    if (record.name === newRecord.name) {
+      record.result = newRecord.result;
+      isFound = true;
+    }
+  });
+  if (!isFound) {
+    faceImageRecords.push(newRecord);
+  }
+  fs.writeFileSync(IMAGE_FACE_RECORD_FILE, JSON.stringify(faceImageRecords, null, 2));
+}
+
+function randomChoice(arr) {
+  return arr[Math.floor(arr.length * Math.random())];
 }
