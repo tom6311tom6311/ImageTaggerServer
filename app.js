@@ -12,19 +12,19 @@ const IMAGE_FACE_RESIZED_DIR = './uploads/face/resized/';
 const IMAGE_FACE_RECORD_FILE = './uploads/face/record.json';
 const API_URL = {
   AZURE: {
-    FACE_DETECT: 'https://westcentralus.api.cognitive.microsoft.com/face/v1.0/detect/',
-    FACE_LISTS: 'https://westcentralus.api.cognitive.microsoft.com/face/v1.0/facelists/',
-    FIND_SIMILARS: 'https://westcentralus.api.cognitive.microsoft.com/face/v1.0/findsimilars/',
+    FACE_DETECT: 'https://westus.api.cognitive.microsoft.com/face/v1.0/detect/',
+    FACE_LISTS: 'https://westus.api.cognitive.microsoft.com/face/v1.0/facelists/',
+    FIND_SIMILARS: 'https://westus.api.cognitive.microsoft.com/face/v1.0/findsimilars/',
   },
 };
 const API_KEY = {
   AZURE: {
     FACE: [
-      'a46d5f77bf8140a1a91d6d1444b6cf20',
-      // 'f93d891a0f004c26bb9cb012f99f7c22',
+      '3af28083fb9b4876a39588edf1287a97',
+      // 'aec982d8bb1f4408828270ebec6a6556',
     ],
   },
-  CLARIFAI: 'aad69e3b420e4b1bbec50e545566b34f',
+  CLARIFAI: 'd5b4f0f999f54c61a6caa2a29480c887',
 };
 const FACE_DETECT_PARAMS = {
   returnFaceId: true,
